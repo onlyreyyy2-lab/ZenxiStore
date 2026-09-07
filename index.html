@@ -31,8 +31,8 @@ h2{font-size:34px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}
 .card{background:#101010;border:1px solid #202020;border-radius:14px;overflow:hidden;transition:.2s}
 .card:hover{transform:translateY(-4px);border-color:#444}
-.card-img{background:#161616;overflow:hidden;display:flex;align-items:center;justify-content:center}
-.card-img img{width:100%;height:auto;display:block;object-fit:contain}
+.card-img{height:180px;background:#161616;overflow:hidden}
+.card-img img{width:100%;height:100%;object-fit:cover}
 .card-body{padding:17px}
 .cat{font-size:10px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
 .card h3{font-size:17px;margin-bottom:9px}
@@ -66,7 +66,7 @@ textarea{resize:vertical}
 .item-actions button:hover{color:#fff}
 .product-form{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
 .product-form label:nth-of-type(4),.product-form label:nth-of-type(5),.product-form label:nth-of-type(6),.product-form .check,.product-form .actions{grid-column:1/-1}
-@media(max-width:650px){.nav{padding:0 20px}.hero h1{letter-spacing:-2px}.section,.admin-wrap{padding:65px 20px}.section-head{display:block}.section-head #search{width:100%;margin-top:18px}.grid{grid-template-columns:repeat(2,1fr);gap:10px}.card-img{min-height:135px}.card-body{padding:13px}.card h3{font-size:14px}.product-form{display:block}.admin-item{align-items:flex-start}.item-actions{flex-direction:column}}
+@media(max-width:650px){.nav{padding:0 20px}.hero h1{letter-spacing:-2px}.section,.admin-wrap{padding:65px 20px}.section-head{display:block}.section-head #search{width:100%;margin-top:18px}.grid{grid-template-columns:repeat(2,1fr);gap:10px}.card-img{height:135px}.card-body{padding:13px}.card h3{font-size:14px}.product-form{display:block}.admin-item{align-items:flex-start}.item-actions{flex-direction:column}}
 
 
 .owner-panel{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.75);backdrop-filter:blur(10px);overflow:auto;padding:30px 20px}
@@ -77,6 +77,9 @@ textarea{resize:vertical}
 </style>
 </head>
 <body>
+<audio id="bgMusic" autoplay loop preload="auto" playsinline>
+  <source src="https://files.catbox.moe/jlatvl.mp3" type="audio/mpeg">
+</audio>
 <header class="nav">
   <a class="brand" href="index.html">ZenxiStore</a>
   <button type="button" id="openOwner" class="admin-link" onclick="openOwnerPanel()">Owner</button>
@@ -163,170 +166,163 @@ textarea{resize:vertical}
 </main>
 
 <footer>© 2026 ZenxiStore</footer>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-const KEY="rynnextdoor_products";
-const products=JSON.parse(localStorage.getItem(KEY)||"[]");
-const grid=document.getElementById("product-list");
-const search=document.getElementById("search");
+/* PASTE THESE TWO VALUES FROM SUPABASE */
+const SUPABASE_URL = "https://lomsswpvzasgojdbeknp.supabase.co";
+const SUPABASE_KEY = "sb_publishable_1bXIb4lhWrRRRJgYDlyZKA_J8qFiSrX";
+const OWNER_EMAIL = "zenxistore@gmail.com";
 
-function save(){localStorage.setItem(KEY,JSON.stringify(products));}
+// Background music: autoplay + loop. Some mobile browsers may block
+// audible autoplay until the visitor interacts with the page.
+const bgMusic = document.getElementById("bgMusic");
+bgMusic.volume = 0.45;
+const tryMusic = () => bgMusic.play().catch(() => {});
+tryMusic();
+["pointerdown","touchstart","keydown"].forEach(ev => document.addEventListener(ev, tryMusic, {once:true, passive:true}));
+
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const grid = document.getElementById("product-list");
+const search = document.getElementById("search");
+let products = [];
+
+function esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
+
+async function loadProducts(){
+  const {data,error}=await db.from("products").select("*").order("created_at",{ascending:false});
+  if(error){grid.innerHTML='<div class="empty">Database belum disambungkan.</div>';console.error(error);return;}
+  products=data||[]; render();
+}
 function render(list=products){
+  const q=(search.value||"").toLowerCase();
+  list=products.filter(p=>p.name.toLowerCase().includes(q)||p.category.toLowerCase().includes(q));
   if(!list.length){grid.innerHTML='<div class="empty">No products available yet.</div>';return;}
-  grid.innerHTML=list.map(p=>`
-    <article class="card">
-      <div class="card-img"><img src="${escapeHtml(p.image||"https://placehold.co/600x400/151515/ffffff?text=PRODUCT")}" alt=""></div>
-      <div class="card-body">
-        <div class="cat">${escapeHtml(p.category)}</div>
-        <h3>${escapeHtml(p.name)}</h3>
-        <p class="desc">${escapeHtml(p.description||"")}</p>
-        <div class="price">${escapeHtml(p.price)}</div>
-        <span class="badge ${p.available?"":"sold"}">${p.available?"Available":"Sold out"}</span>
-      </div>
-    </article>`).join("");
+  grid.innerHTML=list.map(p=>`<article class="card">
+    <div class="card-img"><img src="${esc(p.image_url||"https://placehold.co/600x400/151515/ffffff?text=PRODUCT")}" alt=""></div>
+    <div class="card-body"><div class="cat">${esc(p.category)}</div><h3>${esc(p.name)}</h3>
+    <p class="desc">${esc(p.description||"")}</p><div class="price">${esc(p.price)}</div>
+    <span class="badge ${p.available?"":"sold"}">${p.available?"Available":"Sold out"}</span></div></article>`).join("");
 }
-function escapeHtml(v){return String(v).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
-if(search) search.addEventListener("input",()=>{const q=search.value.toLowerCase();render(products.filter(p=>p.name.toLowerCase().includes(q)||p.category.toLowerCase().includes(q)));});
-render();
+search.addEventListener("input",render);
 
-const OWNER_USER = "Zenxi";
-const OWNER_PASS = "ZenxiLowkey";
-const PRODUCT_KEY = "rynnextdoor_products";
+const ownerPanel=document.getElementById("ownerPanel");
+const ownerLogin=document.getElementById("ownerLogin");
+const ownerDashboard=document.getElementById("ownerDashboard");
+const adminList=document.getElementById("singleAdminList");
 
-const ownerPanel = document.getElementById("ownerPanel");
-const ownerLogin = document.getElementById("ownerLogin");
-const ownerDashboard = document.getElementById("ownerDashboard");
-const adminList = document.getElementById("singleAdminList");
-
-function ownerProducts(){ return JSON.parse(localStorage.getItem(PRODUCT_KEY) || "[]"); }
-function saveOwnerProducts(a){ localStorage.setItem(PRODUCT_KEY, JSON.stringify(a)); }
-function escOwner(v){ return String(v ?? "").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m])); }
-
-function renderOwner(){
-  const a=ownerProducts();
-  adminList.innerHTML = a.length ? a.map((p,i)=>`
-    <div class="admin-item">
-      <img src="${escOwner(p.image || "https://placehold.co/300x200/151515/ffffff?text=PRODUCT")}" alt="">
-      <div class="admin-info"><strong>${escOwner(p.name)}</strong><small>${escOwner(p.price)} · ${escOwner(p.category)} · ${p.available ? "Available":"Sold out"}</small></div>
-      <div class="item-actions">
-        <button onclick="singleEdit(${i})">Edit</button>
-        <button onclick="singleDelete(${i})">Delete</button>
-      </div>
-    </div>`).join("") : '<div class="empty">No products yet. Add your first product.</div>';
+window.openOwnerPanel=async()=>{
+  ownerPanel.classList.remove("hidden");
+  const {data:{session}}=await db.auth.getSession();
+  showOwner(session);
+};
+function showOwner(session){
+  ownerLogin.classList.toggle("hidden",!!session);
+  ownerDashboard.classList.toggle("hidden",!session);
+  if(session) renderOwner();
 }
+document.getElementById("closeOwner").onclick=()=>ownerPanel.classList.add("hidden");
+
+document.getElementById("singleLogin").onsubmit=async e=>{
+  e.preventDefault();
+  const err=document.getElementById("singleError"); err.textContent="";
+  const {data,error}=await db.auth.signInWithPassword({
+    email:document.getElementById("singleUser").value.trim(),
+    password:document.getElementById("singlePass").value
+  });
+  if(error){err.textContent=error.message;return;}
+  if(data.user.email.toLowerCase()!==OWNER_EMAIL.toLowerCase()){
+    await db.auth.signOut(); err.textContent="Akaun ini bukan owner."; return;
+  }
+  showOwner(data.session);
+};
+
+document.getElementById("singleLogout").onclick=async()=>{
+  await db.auth.signOut(); showOwner(null);
+};
 
 function resetOwnerForm(){
   document.getElementById("singleProductForm").reset();
-  selectedImageData = "";
   document.getElementById("singleId").value="";
   document.getElementById("singleAvailable").checked=true;
+  selectedImageData=null;
+}
+let selectedImageData=null;
+
+document.getElementById("singleImageFile").addEventListener("change",e=>{
+  selectedImageData=e.target.files[0]||null;
+});
+
+async function uploadImage(file){
+  if(!file)return null;
+  if(file.size>6*1024*1024) throw new Error("Gambar mesti bawah 6MB.");
+  const ext=(file.name.split(".").pop()||"jpg").toLowerCase();
+  const path=`products/${crypto.randomUUID()}.${ext}`;
+  const {error}=await db.storage.from("product-images").upload(path,file,{contentType:file.type});
+  if(error)throw error;
+  return db.storage.from("product-images").getPublicUrl(path).data.publicUrl;
 }
 
-window.singleEdit=function(i){
-  const p=ownerProducts()[i];
-  document.getElementById("singleId").value=i;
+function renderOwner(){
+  db.from("products").select("*").order("created_at",{ascending:false}).then(({data,error})=>{
+    if(error){adminList.innerHTML='<div class="empty">Gagal load products.</div>';return;}
+    adminList.innerHTML=(data||[]).map(p=>`<div class="admin-item">
+      <img src="${esc(p.image_url||"https://placehold.co/300x200/151515/ffffff?text=PRODUCT")}" alt="">
+      <div class="admin-info"><strong>${esc(p.name)}</strong><small>${esc(p.price)} · ${esc(p.category)} · ${p.available?"Available":"Sold out"}</small></div>
+      <div class="item-actions"><button onclick="singleEdit('${p.id}')">Edit</button><button onclick="singleDelete('${p.id}')">Delete</button></div>
+    </div>`).join("")||'<div class="empty">No products yet.</div>';
+  });
+}
+
+window.singleEdit=async id=>{
+  const {data:p}=await db.from("products").select("*").eq("id",id).single();
+  if(!p)return;
+  document.getElementById("singleId").value=p.id;
   document.getElementById("singleName").value=p.name;
   document.getElementById("singleCategory").value=p.category;
   document.getElementById("singlePrice").value=p.price;
-  document.getElementById("singleImage").value=p.image || "";
-  document.getElementById("singleDescription").value=p.description || "";
+  document.getElementById("singleImage").value="";
+  document.getElementById("singleDescription").value=p.description||"";
   document.getElementById("singleAvailable").checked=!!p.available;
-  document.getElementById("singleName").focus();
 };
 
-window.singleDelete=function(i){
-  if(!confirm("Delete this product?")) return;
-  const a=ownerProducts(); a.splice(i,1); saveOwnerProducts(a); renderOwner();
-  if(typeof render==="function") render();
+window.singleDelete=async id=>{
+  if(!confirm("Delete this product?"))return;
+  const {error}=await db.from("products").delete().eq("id",id);
+  if(error){alert(error.message);return;}
+  await loadProducts(); renderOwner();
 };
 
-function openOwnerPanel(){
-  const panel = document.getElementById("ownerPanel");
-  const login = document.getElementById("ownerLogin");
-  const dashboard = document.getElementById("ownerDashboard");
-  if(!panel) return;
-  panel.classList.remove("hidden");
-  if(sessionStorage.getItem("zenxi_owner")==="1"){
-    login.classList.add("hidden");
-    dashboard.classList.remove("hidden");
-    renderOwner();
-  }else{
-    login.classList.remove("hidden");
-    dashboard.classList.add("hidden");
-    document.getElementById("singleUser").focus();
-  }
-}
-
-document.getElementById("openOwner").addEventListener("click", openOwnerPanel);
-
-document.getElementById("closeOwner").onclick=()=>ownerPanel.classList.add("hidden");
-
-document.getElementById("singleLogin").onsubmit=(e)=>{
-  e.preventDefault();
-  if(document.getElementById("singleUser").value===OWNER_USER &&
-     document.getElementById("singlePass").value===OWNER_PASS){
-    sessionStorage.setItem("zenxi_owner","1");
-    document.getElementById("singleError").textContent="";
-    ownerLogin.classList.add("hidden");
-    ownerDashboard.classList.remove("hidden");
-    renderOwner();
-  }else{
-    document.getElementById("singleError").textContent="Wrong username or password.";
-  }
-};
-
-document.getElementById("singleLogout").onclick=()=>{
-  sessionStorage.removeItem("zenxi_owner");
-  ownerDashboard.classList.add("hidden");
-  ownerLogin.classList.remove("hidden");
-};
-
-document.getElementById("singleNew").onclick=()=>{
-  resetOwnerForm();
-  document.getElementById("singleName").focus();
-};
-
+document.getElementById("singleNew").onclick=resetOwnerForm;
 document.getElementById("singleCancel").onclick=resetOwnerForm;
 
-let selectedImageData = "";
-
-document.getElementById("singleImageFile").addEventListener("change", (e)=>{
-  const file = e.target.files[0];
-  if(!file) return;
-  if(file.size > 2 * 1024 * 1024){
-    alert("Gambar terlalu besar. Sila pilih gambar bawah 2MB.");
-    e.target.value = "";
-    selectedImageData = "";
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = ()=>{ selectedImageData = reader.result; };
-  reader.readAsDataURL(file);
-});
-
-document.getElementById("singleProductForm").onsubmit=(e)=>{
+document.getElementById("singleProductForm").onsubmit=async e=>{
   e.preventDefault();
-  const a=ownerProducts();
-  const id=document.getElementById("singleId").value;
-  const p={
-    name:document.getElementById("singleName").value.trim(),
-    category:document.getElementById("singleCategory").value,
-    price:document.getElementById("singlePrice").value.trim(),
-    image:selectedImageData || document.getElementById("singleImage").value.trim(),
-    description:document.getElementById("singleDescription").value.trim(),
-    available:document.getElementById("singleAvailable").checked
-  };
-  if(id==="") a.push(p); else a[Number(id)]=p;
-  saveOwnerProducts(a);
-  resetOwnerForm();
-  renderOwner();
-  if(typeof render==="function") render();
+  try{
+    const id=document.getElementById("singleId").value;
+    let imageUrl=null;
+    if(selectedImageData) imageUrl=await uploadImage(selectedImageData);
+    const p={
+      name:document.getElementById("singleName").value.trim(),
+      category:document.getElementById("singleCategory").value,
+      price:document.getElementById("singlePrice").value.trim(),
+      description:document.getElementById("singleDescription").value.trim(),
+      available:document.getElementById("singleAvailable").checked
+    };
+    if(imageUrl)p.image_url=imageUrl;
+    if(id){
+      const {error}=await db.from("products").update(p).eq("id",id);
+      if(error)throw error;
+    }else{
+      p.image_url=p.image_url||"";
+      const {error}=await db.from("products").insert(p);
+      if(error)throw error;
+    }
+    resetOwnerForm(); await loadProducts(); renderOwner();
+  }catch(err){alert(err.message||"Gagal simpan product.");}
 };
 
-if(sessionStorage.getItem("zenxi_owner")==="1"){
-  ownerLogin.classList.add("hidden");
-  ownerDashboard.classList.remove("hidden");
-}
-
+db.auth.onAuthStateChange((_event,session)=>showOwner(session));
+loadProducts();
 </script>
 </body>
 </html>
